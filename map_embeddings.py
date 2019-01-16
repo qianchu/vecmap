@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 import embeddings
 from cupy_utils import *
 
@@ -23,7 +22,8 @@ import re
 import sys
 import time
 
-
+DTYPE_DEFAULT='fp32'
+ENCODING_DEFAULT='utf-8'
 def dropout(m, p):
     if p <= 0.0:
         return m
@@ -58,8 +58,8 @@ def main():
     parser.add_argument('trg_input', help='the input target embeddings')
     parser.add_argument('src_output', help='the output source embeddings')
     parser.add_argument('trg_output', help='the output target embeddings')
-    parser.add_argument('--encoding', default='utf-8', help='the character encoding for input/output (defaults to utf-8)')
-    parser.add_argument('--precision', choices=['fp16', 'fp32', 'fp64'], default='fp32', help='the floating-point precision (defaults to fp32)')
+    parser.add_argument('--encoding', default=ENCODING_DEFAULT, help='the character encoding for input/output (defaults to utf-8)')
+    parser.add_argument('--precision', choices=['fp16', 'fp32', 'fp64'], default=DTYPE_DEFAULT, help='the floating-point precision (defaults to fp32)')
     parser.add_argument('--cuda', action='store_true', help='use cuda (requires cupy)')
     parser.add_argument('--batch_size', default=10000, type=int, help='batch size (defaults to 10000); does not affect results, larger is usually faster but uses more memory')
     parser.add_argument('--seed', type=int, default=0, help='the random seed (defaults to 0)')
@@ -127,7 +127,7 @@ def main():
     if args.emnlp2016:
         parser.set_defaults(init_dictionary=args.emnlp2016, orthogonal=True, normalize=['unit', 'center'], batch_size=1000)
     args = parser.parse_args()
-
+    print (args)
     # Check command line arguments
     if (args.src_dewhiten is not None or args.trg_dewhiten is not None) and not args.whiten:
         print('ERROR: De-whitening requires whitening first', file=sys.stderr)
@@ -246,6 +246,8 @@ def main():
     # Allocate memory
     xw = xp.empty_like(x)
     zw = xp.empty_like(z)
+    print ('xw before', xw[0],x[0])
+    print ('zw before', zw[0],z[0])
     src_size = x.shape[0] if args.vocabulary_cutoff <= 0 else min(x.shape[0], args.vocabulary_cutoff)
     trg_size = z.shape[0] if args.vocabulary_cutoff <= 0 else min(z.shape[0], args.vocabulary_cutoff)
     simfwd = xp.empty((args.batch_size, trg_size), dtype=dtype)
@@ -270,7 +272,8 @@ def main():
     t = time.time()
     end = not args.self_learning
     while True:
-
+        print ('round {0}'.format(it))
+        print ('zw',zw[0])
         # Increase the keep probability if we have not improve in args.stochastic_interval iterations
         if it - last_improvement > args.stochastic_interval:
             if keep_prob >= 1.0:
@@ -410,8 +413,13 @@ def main():
         it += 1
 
     # Write mapped embeddings
+    print ('zw',zw[0])
+    print ('xw',xw[0])
+    print ('x', x[0])
+    print ('w',w[0])
     srcfile = open(args.src_output, mode='w', encoding=args.encoding, errors='surrogateescape')
     trgfile = open(args.trg_output, mode='w', encoding=args.encoding, errors='surrogateescape')
+    xp.save(args.src_output+'.w',w)
     embeddings.write(src_words, xw, srcfile)
     embeddings.write(trg_words, zw, trgfile)
     srcfile.close()
